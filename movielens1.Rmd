@@ -1,0 +1,486 @@
+---
+title: "Final project in Data Science at Harvard University **MovieLens**"
+author: "Jan Thomsen"
+date: "01/08/2021"
+output:
+  pdf_document: 
+    toc: yes
+    toc_depth: 2
+    number_sections: yes
+    highlight: pygments
+    keep_tex: yes
+    fig_width: 4
+    fig_height: 3.5
+    fig_caption: yes
+    df_print: paged
+graphics: yes
+number_sections: yes
+geometry: margin=1.75cm
+documentclass: report
+fontsize: 12pt
+
+---
+\newpage
+Abstract: "This is the final assignment for the Harvard Data Science Professional certificate Programme with Professor of Biostatistics Rafael Irizarry from Harvard University. 
+
+It is the 9th and last course in the Data Science series offered by Harvard University:
+
+* **1. R basics**
+* **2. Visualization**
+* **3. Probability**
+* **4. Inference and modeling**
+* **5. Productivity tools**
+* **6. Wrangling**
+* **7. Linear regression**
+* **8. Machine learning**
+* **9. Capstone**
+
+In this capstone project, we given the dataset and instructions we have to clean, analyze and modeling it and show our Data Science knowledge."
+
+
+
+---
+  \newpage
+```{r setup, include=FALSE, warning=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE, fig.align = 'center')
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+# Install all needed libraries if it is not present
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+if(!require(devtools)) install.packages("devtools")
+if(!require(kassambara/easyGgplot2)) install_github("kassambara/easyGgplot2")
+require(plotly)
+require(rpart)
+require(lattice)
+require(ggthemes)
+require(GGally)
+require(knitr)
+require(tidyr)
+require(wordcloud)
+require(kableExtra)
+require(RColorBrewer)
+require(dplyr)
+require(ggplot2)
+require(lubridate)
+require(h2o)
+require(stringr)
+require(formatR)
+require(recosystem)
+require(knitr)
+require(scales)
+
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+# Loading all needed libraries
+library(dplyr)
+library(tidyverse)
+library(kableExtra)
+library(tidyr)
+library(ggplot2)
+library(caret)
+library(easyGgplot2)
+library(devtools)
+library(plotly)
+library(rpart)
+library(lattice)
+library(ggthemes)
+library(GGally)
+library(knitr)
+library(tidyr)
+library(wordcloud)
+library(kableExtra)
+library(RColorBrewer)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(h2o)
+library(stringr)
+library(formatR)
+library(recosystem)
+library(knitr)
+library(scales)
+
+
+```
+
+# Executive Summary
+
+For achieving the task of analysing the dataset i have used knowledge obtained in the 8 courses. 
+
+Instructions from HarvardX this report should include:
+
+* **introduction/overview/executive** summary section that describes the dataset and summarizes the goal of the project and key steps that were performed
+
+* **methods/analysis** section that *explains* the process and techniques used:
+
+* **data cleaning** 
+
+* **data exploration**
+
+* **visualization**
+
+* **results** section that presents the modeling results and discusses the model performance
+a conclusion section that gives a brief summary of the report, its limitations and future work
+
+\newpage
+# Exploratory Data Analysis
+MovieLens data sets were collected by the GroupLens Research Project at the University of Minnesota.
+
+The data was collected through the MovieLens web site
+(movielens.umn.edu) during the seven-month period from September 19th, 1997 through April 22nd, 1998. This data has been cleaned up - users, who had less than 20 ratings or did not have complete demographic information were removed from this data set.
+
+These data were created by 610 users between March 29, 1996 and September 24, 2018. This dataset was generated on September 26, 2018.
+
+Users were selected at random for inclusion. All selected users had rated at least 20 movies. No demographic information is included. Each user is represented by an id, and no other information is provided.
+
+This is a development dataset. As such, it may change over time and is not an appropriate dataset for shared research results. See available benchmark datasets if that is your intent.
+
+It is very important for the analysis to get an overview of the dataset before and during the analysis in order to follow the right path towards a feasible analysis, good results and conclusions.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+dl <- tempfile()
+download.file("http://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+
+# MovieLens 10M dataset:
+#https://grouplens.org/datasets/movielens/10m/
+#http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+ratings <- fread(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings.dat"))),
+                 col.names = c("userId", "movieId", "rating", "timestamp"))
+
+movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
+colnames(movies) <- c("movieId", "title", "genres")
+movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(movieId),
+                                            title = as.character(title),
+                                            genres = as.character(genres))
+
+movielens <- left_join(ratings, movies, by = "movieId")
+
+# Validation set will be 10% of MovieLens data
+
+set.seed(1)
+
+# if using R 3.5 or earlier, use `set.seed(1)` instead
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+edx <- movielens[-test_index,]
+temp <- movielens[test_index,]
+
+# Make sure userId and movieId in validation set are also in edx set
+validation <- temp %>% 
+  semi_join(edx, by = "movieId") %>%
+  semi_join(edx, by = "userId")
+
+# Add rows removed from validation set back into edx set
+
+removed <- anti_join(temp, validation)
+edx <- rbind(edx, removed)
+
+rm(dl, ratings, movies, test_index, temp, movielens, removed)
+
+
+```
+## The Dataset
+
+```{r}
+str(edx)
+```
+
+As you can see The dataset consist of 9,00,061 greetings and 6 variables. This means that it's a relatively large dataset and we will analyze the dataset firstly, secondly we will visualize the data on with the toolbox that we have obtained on these 8 courses.
+
+```{r}
+#summary of the edx data set
+summary(edx)
+```
+## Summary of the validation set
+```{r}
+#summary of the valudation dataset
+summary(validation)
+```
+
+
+# Data cleaning and wrangling
+Before the analysis we need to clean the data and this encompasses:
+
+* Wrangling
+* joining 
+* Eliminating columns
+* Save the new file with the new corrections
+
+Most of the data has be cleaned, and in practice this is often the hardest and the most boring part.
+
+\newpage
+# Visualisation of the training set
+To show the force and flexibility of R studio, the visualization tools are excellent. All though a bit complicated to learn. the improve the overview of the dataset and the rating, the table below show the rating distributed on genres. 
+
+```{r}
+#Table with movies and average ratings
+edx_movies_metrics <- edx %>% separate_rows(genres, sep = "\\|") %>% group_by(genres) %>% summarize(Ratings_perGenre_Sum = n(), Ratings_perGenre_Mean = mean(rating), Movies_perGenre_Sum = n_distinct(movieId), Users_perGenre_Sum = n_distinct(userId))
+edx_movies_metrics
+
+```
+
+
+```{r}
+edx_movies_metrics$Ratings_perGenre_Mean <- round(edx_movies_metrics$Ratings_perGenre_Mean, digits = 2)
+edx_movies_metrics[order(-edx_movies_metrics$Ratings_perGenre_Sum), ]
+
+```
+
+
+
+```{r echo=FALSE, fig.height=5, fig.width=8, message=FALSE, warning=FALSE}
+ggplot(data = edx_movies_metrics, aes(x = reorder(genres, -Ratings_perGenre_Sum), y = Ratings_perGenre_Sum, colour = "red", fill = genres, label = Ratings_perGenre_Sum)) + geom_col() + geom_text(aes(label = comma(Ratings_perGenre_Sum)), angle = 50, color = "white", size = 2, check_overlap = T, position = position_stack((vjust = 0.5))) + 
+  xlab("Movies") + ylab("Million ratings") + ggtitle("Rating per genre") + 
+  scale_y_continuous(labels = scales::comma) + theme_solarized(light = FALSE) + 
+  theme(axis.text.x = element_text(angle = 80))
+```
+
+If you sort the genres in total rating descending order you con conclude that **drama** top with 3.9 million rating point with comedy as the 3.5 million runner up.
+
+To improve the knowledge of interrelations of the viewers preferences the segment that prefer drama might also prefer action and the segment that loves comedy also prefer romance. That would be an obvious choice of segmentation of the population.
+
+
+
+```{r fig.height=3, fig.width=5, message=FALSE, warning=FALSE}
+#Add mean line to the histogram plot.
+# Change fill color and line color
+
+ggplot2.histogram(data=edx$rating, xName='Rating',
+                  fill="white", color="blue",
+                  addMeanLine=TRUE, meanLineColor="red",
+                  meanLineType="dashed", meanLineSize=2)
+```
+In the histogram above you may notice that the distribution on ratings is visualized. the highest average score is 4 and the mean is the dashed line on the value 3.51 ratings.
+
+
+# Training set and test set
+We have now divided the dataset into the training set and the tests. These two data sets will be used for analyses and developing the machine learning model to predict the future ratings.
+
+The training set consists of 9.000,061 and the test set of 999,993 observations. 11.11% sample of the population. This is an large sample and I expect to predict future ratings with a good accuracy.
+
+```{r echo=FALSE}
+df <- data.frame(group = c("Training set", "Test set"),
+  value = c(9000061, 999999))
+
+bp <- ggplot(df, aes(x="", y=value/10, fill=group))+
+geom_bar(width = 1, stat = "identity")
+pie <- bp + coord_polar("y", start=0)
+pie + scale_fill_brewer(palette="Blues")+
+  theme_minimal()
+```
+
+
+# Building a model of Machine Learning
+The model which are needed for the training the dataset will be the following:
+
+$$\sqrt{b^2 - 4ac}$$
+
+## Method 1
+The simplest model is to use the average across every user and every movie as all of our predicted ratings. This model follows the citation, 
+
+$$Y_{u,i} = \mu$$
+where $Y_{u,i}$ is the predicted rating of user $u$ and movie $i$ and $\mu$ is the average rating across all entries. This is computed as 3.512 (`mean(edx$rating)`). This is shown in a histogram.
+
+```{r}
+# calculating the overall average rating on the training dataset
+mu <- mean(edx$rating)
+
+# predicting every unknown ratings with mu and calculate the RMSE
+RMSE(validation$rating, mu)
+
+
+```
+
+## Method 2
+In order to improve the model, I add an independent error term $b_{u,i}$ that expresses rating differences for users and movies.  
+
+The improved model is:
+
+  $$Y_{u,i} = \mu + b_{i}$$
+
+```{r}
+# Movie effect method
+
+# add average ranking term, b_i
+b_i <- edx %>%
+  group_by(movieId) %>%
+  summarize(b_i = mean(rating - mu))
+
+# predict all unknown ratings with mu and b_i
+predicted_ratings <- validation %>% 
+  left_join(b_i, by='movieId') %>%
+  mutate(pred = mu + b_i) %>%
+  pull(pred)
+
+# calculate RMSE of movie ranking effect
+RMSE(validation$rating, predicted_ratings)
+
+```
+
+```{r, echo=FALSE, fig.height=3, fig.cap = "Here is shown the frequency of xxx"}
+# plotting the distribution of b_i s
+qplot(b_i, data = b_i, bins = 25, color = I("black")) 
+
+```
+
+## Method 3
+The user bias term $b_u$ will be used to reduce the errors additionally. The addition shall reduce the variability. Each user $u$ is given a bias term take into account their predicted movies. 
+
+Then I have:
+ $$Y_{u,i} = \mu + b_{i} + b_{u}$$
+
+```{r message=FALSE, warning=FALSE}
+# compute user bias term
+b_u <- edx %>% 
+  left_join(b_i, by='movieId') %>%
+  group_by(userId) %>%
+  summarize(b_u = mean(rating - mu - b_i))
+
+# predict new ratings with movie and user bias
+predicted_ratings <- validation %>% 
+  left_join(b_i, by='movieId') %>%
+  left_join(b_u, by='userId') %>%
+  mutate(pred = mu + b_i + b_u) %>%
+  pull(pred)
+# calculate RMSE
+RMSE(predicted_ratings, validation$rating)
+
+```
+
+## Method 4
+The last thing I will implement is minimizing the big errors in my predictions. Regularization recudes the bias of sample size too small
+
+For instance, our $b_i$ term accounts for the average deviation on all ratings of a movie, whether there are 5 or 50 ratings on the film. 
+
+This can be seen in the following citation:
+
+$${N} \sum_{u,i}(Y_{u,i} - \mu - b_i - b_u)^2 + \lambda (\sum_{i} b_i^2 + \sum_u b_u^2)$$
+
+Minimizing the biases using a single $\lambda$ is the goal to our model shown above. The following test I use `lamda <- seq(from=0, to=10, by=0.25)`.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# determine best lambda from a sequence
+lambdas <- seq(from=0, to=10, by=0.25)
+# output RMSE of each lambda, repeat earlier steps (with regularization)
+rmses <- sapply(lambdas, function(l){
+  # calculate average rating across training data
+  mu <- mean(edx$rating)
+  # compute regularized movie bias term
+  b_i <- edx %>% 
+    group_by(movieId) %>%
+    summarize(b_i = sum(rating - mu)/(n()+l))
+  # compute regularize user bias term
+  b_u <- edx %>% 
+    left_join(b_i, by="movieId") %>%
+    group_by(userId) %>%
+    summarize(b_u = sum(rating - b_i - mu)/(n()+l))
+  # compute predictions on validation set based on these above terms
+  predicted_ratings <- validation %>% 
+    left_join(b_i, by = "movieId") %>%
+    left_join(b_u, by = "userId") %>%
+    mutate(pred = mu + b_i + b_u) %>%
+    pull(pred)
+  # output RMSE of these predictions
+  return(RMSE(predicted_ratings, validation$rating))
+})
+
+```
+
+```{r echo=FALSE, fig.cap="Shows the RMSEs of each $lambda$ - seq(from=0, to=10, by=0.25)"}
+# quick plot of RMSE vs lambdas
+qplot(lambdas, rmses)
+
+```
+
+```{r}
+# print minimum RMSE 
+min(rmses)
+
+```
+
+## Final
+Now we introduce the user bias term $b_u$ in order to further improve our model. This term minimizes the effect of extreme ratings made by users that love or hate every movie. Each user $u$ is given a bias term that sways their predicted movies. Our updated model is:
+
+$$Y_{u,i} = \mu + b_{i} + b_{u}$$
+
+```{r message=FALSE, warning=FALSE}
+# The final linear model with the minimizing lambda
+lam <- lambdas[which.min(rmses)]
+
+b_i <- edx %>% 
+  group_by(movieId) %>%
+  summarize(b_i = sum(rating - mu)/(n()+lam))
+# compute regularize user bias term
+b_u <- edx %>% 
+  left_join(b_i, by="movieId") %>%
+  group_by(userId) %>%
+  summarize(b_u = sum(rating - b_i - mu)/(n()+lam))
+# compute predictions on validation set based on these above terms
+predicted_ratings <- validation %>% 
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  mutate(pred = mu + b_i + b_u) %>%
+  pull(pred)
+# output RMSE of these predictions
+RMSE(predicted_ratings, validation$rating)
+```
+
+\newpage
+# Results and conclusion
+With the term web scraping the model could be improved by adding additional dimensions into the datasets such as expected costs of movie, rescaling ratings etc. 
+
+During the process of optimizing the models it seems obvious that movie and userid explain more than the genre.
+After training different models, it’s very clear that movieId and userId contribute more than the genre predictor.  
+
+To get an overview of the obtained and calculated RMSEs please note the following table.
+
+| Method                             | RMSE     |
+|------------------------------------|----------|
+| Method 1                           | 1.06120  |
+| Method 2                           | 0.94391  |
+| Method 3                           | 0.86535  |
+| Method 4                           | 0.86481  |
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Plotting the development in REMSES
+x <- c(1.06120, 0.94391, 0.86535, 0.86481)
+df <- data.frame(method=c("Method_1", "Method_2", "Method_3", "Method_4"), rms=c(1.06120, 0.94391, 0.86535, 0.86481))
+
+ggplot(data=df, aes(x=method, y=rms, group=1)) +
+  geom_line(linetype = "dashed")+
+  geom_point() +
+  geom_line(linetype="dotted", color="red", size=2)+
+  geom_point(color="blue", size=3) + ggtitle("Incremental RMSE")
+
+```
+
+**My take-out from the course**
+The knowledge that i have gained before this course - was started in 1990 with statistics with pen and paper, so I have refreshed and updated my statistics, but most importantly -  R - statistics calculations, R Markdown and the power of the new technology, i can certainly relate to now. 
+
+It has been a very interesting journey from my perspective. The core for me is that it is very important to improve the communication of knowledge, the visual part. That's a science. Its far more important than the quantity of charts that you may have in one report. 
+
+The idea must be to make complex relations into simple keystrokes for the audience or target group.
+
+January 2021
+
+Jan Thomsen
+
+\newpage
+
+# Appendix
+
+## 1 - Acknowledgements
+My wife for accepting my attendance on these 9 courses
+
+
+
+
+
